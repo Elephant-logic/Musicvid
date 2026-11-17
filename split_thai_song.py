@@ -64,7 +64,7 @@ def run(input_path: Path, output_dir: Path, window_s: int = 8) -> Path:
         "window_seconds": window_s,
         "clip_count": count,
         "notes": [
-            "Clips are consecutive 8-second audio windows with no gaps in the source timeline.",
+            f"Clips are consecutive {window_s}-second audio windows with no gaps in the source timeline.",
             "The last clip has silence padding; trim its corresponding video to song_audio_seconds.",
             "For the final edit, use the original full song as the soundtrack to avoid MP3 re-encode drift.",
             "No image continuity is guaranteed by OmniHuman; pass each accepted final frame as the next clip's image input and inspect each result.",
@@ -72,7 +72,7 @@ def run(input_path: Path, output_dir: Path, window_s: int = 8) -> Path:
         "segments": segments,
     }
     (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    archive = output_dir.parent / "thai_song_8_second_clips.zip"
+    archive = output_dir.parent / f"thai_song_{window_s}_second_clips.zip"
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zipped:
         for path in sorted(output_dir.iterdir()):
             zipped.write(path, arcname=path.name)
