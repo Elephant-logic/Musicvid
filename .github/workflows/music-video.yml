@@ -1,0 +1,36 @@
+name: Thai singer test
+on:
+  workflow_dispatch:
+    inputs:
+      image_url:
+        description: Direct HTTPS URL of singer image
+        required: true
+        type: string
+      audio_url:
+        description: Direct HTTPS URL of 8-second Thai audio excerpt
+        required: true
+        type: string
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Generate singing video (paid API calls)
+        env:
+          PIAPI_KEY: ${{ secrets.PIAPI_KEY }}
+          IMAGE_URL: ${{ inputs.image_url }}
+          AUDIO_URL: ${{ inputs.audio_url }}
+        run: python generate.py --image-url "$IMAGE_URL" --audio-url "$AUDIO_URL"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: thai-singer-test
+          path: |
+            thai_singer_test.mp4
+            result.json
+          if-no-files-found: warn
