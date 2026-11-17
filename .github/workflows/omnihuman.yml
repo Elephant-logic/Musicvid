@@ -1,0 +1,38 @@
+name: OmniHuman Thai singer test
+on:
+  workflow_dispatch:
+    inputs:
+      existing_task_id:
+        description: Existing OmniHuman task ID (resume without new paid submission)
+        required: false
+        type: string
+jobs:
+  omnihuman:
+    runs-on: ubuntu-latest
+    environment: Musicvid
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Generate OmniHuman singer or resume existing task
+        env:
+          PIAPI_KEY: ${{ secrets.PIAPI_KEY }}
+          EXISTING_TASK_ID: ${{ inputs.existing_task_id }}
+        run: |
+          if [ -n "$EXISTING_TASK_ID" ]; then
+            python omnihuman_test.py --task-id "$EXISTING_TASK_ID"
+          else
+            python omnihuman_test.py
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: omnihuman-thai-test
+          path: |
+            omnihuman_thai_test.mp4
+            result.json
+            task_id.txt
+          if-no-files-found: warn
