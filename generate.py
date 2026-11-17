@@ -11,7 +11,8 @@ API = "https://api.piapi.ai/api/v1/task"
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--image-url", required=True)
+    parser.add_argument("--image-url")
+    parser.add_argument("--origin-task-id", help="Reuse completed Kling video task; skip video generation")
     parser.add_argument("--audio-url", required=True)
     parser.add_argument("--poll-seconds", type=int, default=10)
     parser.add_argument("--timeout-seconds", type=int, default=900)
@@ -19,7 +20,11 @@ def main():
     key = os.environ.get("PIAPI_KEY")
     if not key:
         sys.exit("Missing PIAPI_KEY environment variable")
-    for url in (args.image_url, args.audio_url):
+    if not args.origin_task_id and not args.image_url:
+        sys.exit("Provide --origin-task-id or --image-url")
+    for url in (args.audio_url, args.image_url):
+        if url is None:
+            continue
         if not url.startswith("https://"):
             sys.exit("Use direct HTTPS media URLs")
     session = requests.Session()
@@ -48,20 +53,24 @@ def main():
             time.sleep(args.poll_seconds)
         raise TimeoutError(f"Timed out waiting for task {task_id}")
 
-    video_id = submit({
-        "model": "kling",
-        "task_type": "video_generation",
-        "input": {
-            "version": "2.6",
-            "mode": "std",
-            "duration": 10,
-            "image_url": args.image_url,
-            "prompt": "Static medium close-up of a fictional adult Thai female singer with short dark bob, round glasses and black top in a warm recording studio. Natural gentle performance, clear unobstructed face, minimal head movement, no scene cuts."
-        },
-        "config": {"service_mode": "public"}
-    })
-    print("Video task:", video_id, flush=True)
-    wait(video_id)
+    if args.origin_task_id:
+        video_id = args.origin_task_id.strip()
+        print("Reusing existing video task:", video_id, flush=True)
+    else:
+        video_id = submit({
+            "model": "kling",
+            "task_type": "video_generation",
+            "input": {
+                "version": "2.6",
+                "mode": "std",
+                "duration": 10,
+                "image_url": args.image_url,
+                "prompt": "Static medium close-up of a fictional adult Thai female singer with short dark bob, round glasses and black top in a warm recording studio. Natural gentle performance, clear unobstructed face, minimal head movement, no scene cuts."
+            },
+            "config": {"service_mode": "public"}
+        })
+        print("Video task:", video_id, flush=True)
+        wait(video_id)
 
     lip_id = submit({
         "model": "kling",
@@ -70,7 +79,15 @@ def main():
         "config": {"service_mode": "public"}
     })
     print("Lip-sync task:", lip_id, flush=True)
-    result = wait(lip_id)
+    try:
+        result = wait(lip_id)
+    except Exception:
+        try:
+            response = session.get(f"{API}/{lip_id}", timeout=60)
+            Path("result.json").write_text(json.dumps(response.json(), ensure_ascii=False, indent=2))
+        except Exception as diagnostic_error:
+            print("Could not save failure diagnostics:", diagnostic_error)
+        raise
     Path("result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2))
     output = result.get("output", {})
     url = output.get("video_url") or output.get("video") or output.get("url")
