@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import subprocess
 import time
 from pathlib import Path
 import requests
@@ -15,7 +16,14 @@ def main():
     parser.add_argument("--image-url", default=DEFAULT_IMAGE)
     parser.add_argument("--audio-url", default=DEFAULT_AUDIO)
     parser.add_argument("--task-id", default="", help="Resume existing task without spending credits")
-    parser.add_argument("--timeout", type=int, default=1800)
+    parser.add_argument("--timeout", type=int, default=3600)
+    parser.add_argument("--prompt", default=(
+        "A photorealistic young Thai female singer with short dark bob, "
+        "round glasses and black outfit sits in a cozy cafe holding and softly "
+        "playing her acoustic guitar. No microphone. She sings the supplied "
+        "Thai song naturally, with consistent facial identity, gentle movements, "
+        "steady portrait-oriented phone framing, realistic ambient light."
+    ))
     args = parser.parse_args()
     key = os.getenv("PIAPI_KEY")
     if not key:
@@ -40,11 +48,11 @@ def main():
             "input": {
                 "image_url": args.image_url,
                 "audio_url": args.audio_url,
-                "prompt": "A fictional adult Thai female singer with short dark bob haircut and round glasses performs an intimate Thai pop song in a warm recording studio. Sing naturally and expressively, face visible, gentle head movement, realistic mouth movements matched to the supplied audio, steady camera.",
+                "prompt": args.prompt,
                 "fast_mode": True
             }
         }
-        print("Submitting paid OmniHuman task (8 seconds, estimated $1.04)", flush=True)
+        print("Submitting paid OmniHuman task (charged by audio duration)", flush=True)
         response = session.post(API, json=payload, timeout=60)
         response.raise_for_status()
         result = response.json()
@@ -81,6 +89,16 @@ def main():
             download.raise_for_status()
             Path("omnihuman_thai_test.mp4").write_bytes(download.content)
             print("Saved omnihuman_thai_test.mp4", flush=True)
+            # An approximate final frame to use as the next clip's image input.
+            try:
+                subprocess.run([
+                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                    "-sseof", "-0.08", "-i", "omnihuman_thai_test.mp4",
+                    "-frames:v", "1", "last_frame.jpg"
+                ], check=True)
+                print("Saved last_frame.jpg for next scene", flush=True)
+            except (OSError, subprocess.CalledProcessError) as exc:
+                print("Frame extraction unavailable:", exc, flush=True)
             return
         time.sleep(10)
     raise TimeoutError("Task still processing; rerun with --task-id " + task_id)
