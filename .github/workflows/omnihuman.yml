@@ -2,6 +2,14 @@ name: OmniHuman Thai singer test
 on:
   workflow_dispatch:
     inputs:
+      image_url:
+        description: HTTPS singer image URL (blank uses older studio test image)
+        required: false
+        type: string
+      audio_url:
+        description: HTTPS audio segment URL (blank uses older 8-second test)
+        required: false
+        type: string
       existing_task_id:
         description: Existing OmniHuman task ID (resume without new paid submission)
         required: false
@@ -10,7 +18,7 @@ jobs:
   omnihuman:
     runs-on: ubuntu-latest
     environment: Musicvid
-    timeout-minutes: 40
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,11 +29,16 @@ jobs:
         env:
           PIAPI_KEY: ${{ secrets.PIAPI_KEY }}
           EXISTING_TASK_ID: ${{ inputs.existing_task_id }}
+          IMAGE_URL: ${{ inputs.image_url }}
+          AUDIO_URL: ${{ inputs.audio_url }}
         run: |
           if [ -n "$EXISTING_TASK_ID" ]; then
             python omnihuman_test.py --task-id "$EXISTING_TASK_ID"
           else
-            python omnihuman_test.py
+            args=()
+            if [ -n "$IMAGE_URL" ]; then args+=(--image-url "$IMAGE_URL"); fi
+            if [ -n "$AUDIO_URL" ]; then args+=(--audio-url "$AUDIO_URL"); fi
+            python omnihuman_test.py "${args[@]}"
           fi
       - uses: actions/upload-artifact@v4
         if: always()
@@ -33,6 +46,7 @@ jobs:
           name: omnihuman-thai-test
           path: |
             omnihuman_thai_test.mp4
+            last_frame.jpg
             result.json
             task_id.txt
           if-no-files-found: warn
