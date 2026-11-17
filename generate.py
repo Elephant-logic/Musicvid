@@ -12,6 +12,7 @@ API = "https://api.piapi.ai/api/v1/task"
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--image-url")
+    parser.add_argument("--lip-task-id", help="Resume an existing lip-sync task without a new paid submission")
     parser.add_argument("--origin-task-id", help="Reuse completed Kling video task; skip video generation")
     parser.add_argument("--audio-url", required=True)
     parser.add_argument("--poll-seconds", type=int, default=10)
@@ -20,7 +21,7 @@ def main():
     key = os.environ.get("PIAPI_KEY")
     if not key:
         sys.exit("Missing PIAPI_KEY environment variable")
-    if not args.origin_task_id and not args.image_url:
+    if not args.lip_task_id and not args.origin_task_id and not args.image_url:
         sys.exit("Provide --origin-task-id or --image-url")
     for url in (args.audio_url, args.image_url):
         if url is None:
@@ -41,8 +42,13 @@ def main():
     def wait(task_id):
         deadline = time.monotonic() + args.timeout_seconds
         while time.monotonic() < deadline:
-            r = session.get(f"{API}/{task_id}", timeout=60)
-            r.raise_for_status()
+            try:
+                r = session.get(f"{API}/{task_id}", timeout=(15, 45))
+                r.raise_for_status()
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+                print(f"Transient status connection failure: {type(exc).__name__}; retrying GET", flush=True)
+                time.sleep(args.poll_seconds)
+                continue
             data = r.json().get("data", {})
             status = str(data.get("status", "")).lower()
             print("Task status:", status, flush=True)
@@ -53,7 +59,10 @@ def main():
             time.sleep(args.poll_seconds)
         raise TimeoutError(f"Timed out waiting for task {task_id}")
 
-    if args.origin_task_id:
+    if args.lip_task_id:
+        lip_id = args.lip_task_id.strip()
+        print("Resuming existing lip-sync task:", lip_id, flush=True)
+    elif args.origin_task_id:
         video_id = args.origin_task_id.strip()
         print("Reusing existing video task:", video_id, flush=True)
     else:
@@ -72,13 +81,14 @@ def main():
         print("Video task:", video_id, flush=True)
         wait(video_id)
 
-    lip_id = submit({
+    if not args.lip_task_id:
+        lip_id = submit({
         "model": "kling",
         "task_type": "lip_sync",
         "input": {"origin_task_id": video_id, "local_dubbing_url": args.audio_url},
         "config": {"service_mode": "public"}
-    })
-    print("Lip-sync task:", lip_id, flush=True)
+        })
+        print("Lip-sync task:", lip_id, flush=True)
     try:
         result = wait(lip_id)
     except Exception:
