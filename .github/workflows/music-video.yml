@@ -2,9 +2,13 @@ name: Thai singer test
 on:
   workflow_dispatch:
     inputs:
+      origin_task_id:
+        description: Existing completed Kling video task ID (skip paid video generation)
+        required: false
+        type: string
       image_url:
-        description: Direct HTTPS URL of singer image
-        required: true
+        description: Direct HTTPS URL of singer image (only if generating a new video)
+        required: false
         type: string
       audio_url:
         description: Direct HTTPS URL of 8-second Thai audio excerpt
@@ -25,8 +29,14 @@ jobs:
         env:
           PIAPI_KEY: ${{ secrets.PIAPI_KEY }}
           IMAGE_URL: ${{ inputs.image_url }}
+          ORIGIN_TASK_ID: ${{ inputs.origin_task_id }}
           AUDIO_URL: ${{ inputs.audio_url }}
-        run: python generate.py --image-url "$IMAGE_URL" --audio-url "$AUDIO_URL"
+        run: |
+          if [ -n "$ORIGIN_TASK_ID" ]; then
+            python generate.py --origin-task-id "$ORIGIN_TASK_ID" --audio-url "$AUDIO_URL"
+          else
+            python generate.py --image-url "$IMAGE_URL" --audio-url "$AUDIO_URL"
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
