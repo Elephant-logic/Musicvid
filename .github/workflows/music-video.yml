@@ -12,6 +12,7 @@ on:
         type: string
 jobs:
   generate:
+    environment: Musicvid
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
